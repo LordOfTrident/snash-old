@@ -4,20 +4,27 @@ N_APP = snash
 # Files
 F_SRC = \
 	src/main.c\
+	src/str.c\
+	src/error.c\
+	src/var.c\
 	src/utils.c\
 	src/snash.c
 
 F_HEADER = \
 	src/snash.h\
-	src/utils.h\
 	src/types.h\
-	src/components.h
+	src/str.h\
+	src/error.h\
+	src/colors.h\
+	src/var.h\
+	src/utils.h\
+	src/version.h
 
 F_ALL = ${F_SRC} ${F_HEADER}
 
 # Compiler related
 C = gcc
-C_VER = c99
+C_VER = gnu99 # c99 has problems with signal.h and others on linux
 C_FLAGS = \
 	-O3\
 	-std=${C_VER}\

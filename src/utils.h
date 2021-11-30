@@ -1,14 +1,13 @@
 #ifndef __UTILS_H_HEADER_GUARD__
 #define __UTILS_H_HEADER_GUARD__
 
-#include "components.h"
-#include "types.h"
+#include <stdio.h> // ftell, fseek, FILE, SEEK_END,
+                   // fopen, fclose, EOF, SEEK_SET
 
-char *Utils_StrReplace(
-	char *p_str,
-	char *p_toRep,
-	char *p_rep
-);
-char *Utils_ReadFile(const char *p_name, const usize p_chunkSize);
+#include "types.h"
+#include "error.h"
+#include "str.h"
+
+t_str utils_readfile(t_str p_name);
 
 #endif // __UTILS_H_HEADER_GUARD__

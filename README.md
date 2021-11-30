@@ -29,6 +29,9 @@ implemented. Snash stands for Snail Shell.
 - [ ] If statements
 - [ ] Loops
 
+## Known bugs
+- Readline not working properly with prompt escape sequences
+
 ## Make
 Use `make all` to see all the make targets.
 

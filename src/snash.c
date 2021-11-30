@@ -1,231 +1,154 @@
 #include "snash.h"
 
-bool Snash_state = SNASH_ST_NOTRUNNING;
-char *Snash_prompt = NULL;
-Snash_Vars Snash_vars;
-u8 Snash_exitcode = SNASH_EC_OK;
-char *Snash_path;
-
-// Snash variables list functions
-u8 Snash_SetVar(
-	Snash_Vars *p_vars,
-	const char *p_name,
-	const char *p_val
-) {
-	if (p_vars == NULL)
-		return SNASH_GENERIC_ERROR;
-
-	if (p_vars->buf == NULL) {
-		p_vars->buf = (Snash_Var*)malloc(sizeof(Snash_Var));
-		p_vars->len = 1;
-
-		if (p_vars->buf == NULL)
-			return SNASH_MALLOC_ERROR;
-
-		goto l_setValues;
-	};
-
-	for (usize i = 0; i < p_vars->len; ++ i) {
-		if (strcmp(p_vars->buf[i].name, p_name) == 0) {
-			void *tmp = realloc(
-				p_vars->buf[i].val,
-				strlen(p_val) + 1
-			);
-			if (tmp == NULL) {
-				free(p_vars->buf[i].val);
-				return SNASH_REALLOC_ERROR;
-			};
-
-
-			p_vars->buf = (Snash_Var*)tmp;
-			strcpy(p_vars->buf[i].val, p_val);
-			return SNASH_NO_ERROR;
-		};
-	};
-
-	++ p_vars->len;
-	void *tmp = (Snash_Var*)realloc(
-		p_vars->buf,
-		sizeof(Snash_Var) * p_vars->len
-	);
-
-	if (tmp == NULL) {
-		free(p_vars->buf);
-		return SNASH_REALLOC_ERROR;
-	};
-
-	p_vars->buf = (Snash_Var*)tmp;
-
-l_setValues:; // The semicolon is here to prevent a c99 error
-	usize idx = p_vars->len - 1;
-	p_vars->buf[idx].name = malloc(strlen(p_name) + 1);
-	if (p_vars->buf[idx].name == NULL)
-		return SNASH_MALLOC_ERROR;
-
-	strcpy(p_vars->buf[idx].name, p_name);
-
-	p_vars->buf[idx].val = malloc(strlen(p_val) + 1);
-	if (p_vars->buf[idx].val == NULL)
-		return SNASH_MALLOC_ERROR;
-
-	strcpy(p_vars->buf[idx].val, p_val);
-
-	return SNASH_NO_ERROR;
+t_snash_pss g_snash_pss[SNASH_PSS_CNT] = {
+	{STR("\\w", 2), STR_NULL}, // Current working directory
+	{STR("\\h", 2), STR_NULL}, // Hostname
+	{STR("\\u", 2), STR_NULL}, // User
+	{STR("\\v", 2), STR_NULL}  // Snash version
 };
+t_str  g_snash_path = STR_NULL;
+u8     g_snash_exitcode = SNASH_EC_OK;
+t_vars g_snash_vars;
+t_snash_runst g_snash_runst = snash_runst_not_running;
 
-char *Snash_GetVar(
-	Snash_Vars *p_vars,
-	const char *p_name
-) {
-	if (p_vars == NULL || p_vars->buf == NULL)
-		return NULL;
+void snash_init(void) {
+	vars_init(&g_snash_vars);
+	if (g_error.hpnd)
+		error();
 
+	struct sigaction sig_int_handler;
 
-	for (usize i = 0; i < p_vars->len; ++ i)
-		if (strcmp(p_vars->buf[i].name, p_name) == 0)
-			return p_vars->buf[i].val;
+	sig_int_handler.sa_handler = snash_signal_handler;
+	sigemptyset(&sig_int_handler.sa_mask);
+	sig_int_handler.sa_flags = 0;
 
-	return NULL;
-};
-
-// Main snash functions
-void Snash_Init(void) {
-	Snash_vars.buf = NULL;
-	Snash_vars.len = 0;
-
-	setenv("SHELL", Snash_path, true);
-	signal(SIGINT, Snash_SignalHandler);
+	sigaction(SIGINT, &sig_int_handler, NULL);
+	setenv(SNASH_VAR_SHELL, g_snash_path.buf, true);
 
 	using_history();
 	rl_set_signals();
 
-	char *hostname = Utils_ReadFile("/etc/hostname", 64);
-	for (usize i = 0; i < strlen(hostname); ++ i) {
-		if (hostname[i] == ' ' || hostname[i] == '\n') {
-			hostname[i] = '\0';
-			break;
-		};
-	};
-	setenv("HOSTNAME", hostname, true);
-
-	char *user = getenv("USER");
-	char *prompt = (char*)malloc(
-		strlen(user) +
-		strlen(hostname) + 4
+	setenv(
+		SNASH_VAR_PDEF,
+		COLOR_F_RED"["COLOR_F_YELLOW"\\u"COLOR_F_GREEN"@"
+		COLOR_F_CYAN"\\h"COLOR_F_BLUE" \\w"COLOR_F_MAGENTA"]$ "COLOR_RESET,
+		true
 	);
-	strcpy(prompt, user);
-	strcat(prompt, "@");
-	strcat(prompt, hostname);
-	strcat(prompt, "! ");
+	setenv(SNASH_VAR_PSEC, COLOR_RESET"> ", true);
+	setenv(SNASH_VAR_VERSION, SNASH_VERSION, true);
 
-	u8 success = Snash_SetVar(&Snash_vars, "SNASHPROMPT", prompt);
-	if (success != SNASH_NO_ERROR)
-		Snash_InternalError(
-			success,
-			"Snash_SetVar(&Snash_vars, \"SNASHPROMPT\", prompt)"
-		);
-
-	free(hostname);
-	free(prompt);
+	g_snash_pss[SNASH_PSS_V_IDX].rep = str(SNASH_VERSION);
 };
 
-void Snash_MainLoop(void) {
-	if (Snash_state == SNASH_ST_HASTOEXIT)
-		return;
+void snash_main_loop(void) {
+	ERR_WATCH_INIT;
+	g_snash_runst = snash_runst_running;
+	while (g_snash_runst == snash_runst_running) {
+		snash_update_vars();
 
-	Snash_state = SNASH_ST_RUNNING;
-	while (Snash_state == SNASH_ST_RUNNING) {
-		char *in = readline(Snash_GetVar(&Snash_vars, "SNASHPROMPT"));
+		t_str prompt = snash_get_prompt();
+		if (g_error.hpnd)
+			error();
 
-		if (in == NULL) {
-			printf("readline() error: returned NULL");
-			continue;
+		t_str in = str(readline(prompt.buf)); ERR_WATCH;
+		str_free(&prompt);
+
+		if (in.buf == NULL) {
+			ERR_SET_G_ERROR("in.buf is NULL");
+			error();
 		};
 
-		add_history(in);
+		add_history(in.buf);
 
-		if (
-			strcmp(in, "exit") == 0 ||
-			Snash_state == SNASH_ST_HASTOEXIT
-		)
-			Snash_state = SNASH_ST_NOTRUNNING;
+		if (str_comp(in, str("exit")))
+			g_snash_runst = snash_runst_not_running;
 
-		free(in); // readline allocates memory and
-		          // we need to free it
+		str_free(&in);
 	};
 };
 
-void Snash_Finish(void) {
-	if (Snash_vars.buf != NULL) {
-		for (usize i = 0; i < Snash_vars.len; ++ i) {
-			free(Snash_vars.buf[i].val);
-			free(Snash_vars.buf[i].name);
+void snash_finish(void) {
+	str_free(&g_snash_path);
+	vars_free(&g_snash_vars);
+	if (g_error.hpnd)
+		error();
+};
+
+void snash_update_vars(void) {
+	ERR_WATCH_INIT;
+	t_str hostname = utils_readfile(str("/etc/hostname")); ERR_WATCH;
+	if (hostname.buf == NULL) {
+		ERR_SET_G_ERROR("hostname.buf is NULL");
+		error();
+	};
+	t_str curr_dir = str(getcwd(NULL, 0)); ERR_WATCH;
+	if (curr_dir.buf == NULL) {
+		ERR_SET_G_ERROR("curr_dir.buf is NULL");
+		error();
+	};
+
+	for (usize i = hostname.len - 1; i > 0; -- i) {
+		char ch = hostname.buf[i];
+		if (ch != ' ' && ch != '\n' && ch != '\r' && ch != '\t' && ch != '\0') {
+			str_substr_into(&hostname, 0, i + 1);
+			break;
 		};
-
-		free(Snash_vars.buf);
 	};
+	if (g_error.hpnd)
+		error();
+
+	setenv(SNASH_VAR_HOSTNAME, hostname.buf, true);
+	setenv(SNASH_VAR_CURR_DIR, curr_dir.buf, true);
+
+	// These strings are on the heap, they have to be freed!
+	str_free(&g_snash_pss[SNASH_PSS_W_IDX].rep);
+	str_free(&g_snash_pss[SNASH_PSS_H_IDX].rep);
+	if (g_error.hpnd)
+		g_error.hpnd = false; // str_free will error if .rep is NULL
+
+	g_snash_pss[SNASH_PSS_W_IDX].rep = curr_dir;
+	g_snash_pss[SNASH_PSS_H_IDX].rep = hostname;
+	g_snash_pss[SNASH_PSS_U_IDX].rep = str(getenv(SNASH_VAR_USER));
 };
 
-// Rest of snash
-void Snash_InternalError(const u8 p_errId, const char *p_why) {
-	switch (p_errId) {
-		case SNASH_NO_ERROR: return;
-		case SNASH_REALLOC_ERROR:
-			printf("SNASH Internal realloc() error, why: %s\n", p_why);
-			break;
-
-		case SNASH_MALLOC_ERROR:
-			printf("SNASH Internal malloc() error, why: %s\n", p_why);
-			break;
-
-		case SNASH_GENERIC_ERROR:
-			printf("SNASH Internal generic error, why: %s\n", p_why);
+t_str snash_get_prompt(void) {
+	t_str prompt = str_copy(str(getenv(SNASH_VAR_PDEF)));
+	for (usize i = 0; i < SNASH_PSS_CNT; ++ i) {
+		t_str tmp = str_replace(prompt, g_snash_pss[i].seq, g_snash_pss[i].rep);
+		str_free(&prompt);
+		prompt = tmp;
 	};
+
+	return prompt;
 };
 
-bool Snash_ReadParams(
-	const int p_argc,
-	const char *p_argv[]
-) {
-	bool exit = false;
+bool snash_read_params(int p_argc, const char *p_argv[]) {
+	bool start = true;
 	for (usize i = 1; i < p_argc; ++ i) {
 		if (p_argv[i][0] == '-') {
-			if (
-				strcmp(p_argv[i], "-v") == 0 ||
-				strcmp(p_argv[i], "--version") == 0
-			) {
-				printf(
-					"Snash version %i.%i.%i\n",
-					SNASH_VERSION_MAJOR,
-					SNASH_VERSION_MINOR,
-					SNASH_VERSION_PATCH
-				);
+			t_str arg = str((char*)p_argv[i]);
 
-				exit = true;
-			} else if (
-				strcmp(p_argv[i], "-h") == 0 ||
-				strcmp(p_argv[i], "--help") == 0
-			) {
+			if (str_comp(arg, str("-v")) || str_comp(arg, str("--version"))) {
+				printf("snash version %s\n", SNASH_VERSION);
+				start = false;
+			} else if (str_comp(arg, str("-h")) || str_comp(arg, str("--help"))) {
 				printf(
-					"Usage: app [Options]\n"
+					"Usage: snash [options]\n"
 					"Options:\n"
 					"    -h, --help     Show the usage\n"
 					"    -v  --version  Show the current version\n"
 				);
-
-				exit = true;
+				start = false;
 			} else
-				goto l_error; // Not a bad usage of labels, dont complain
+				goto l_error;
+		} else {
+		l_error:
+			eprintf("Invalid option '%s'\n", p_argv[i]);
+			start = false;
 		};
-
-	l_error:
-		printf("Invalid option '%s'\n", p_argv[i]);
-		exit = true;
 	};
 
-	return exit;
+	return start;
 };
 
-void Snash_SignalHandler(const int p_signal) {
-
-};
+void snash_signal_handler(int p_signal) {};

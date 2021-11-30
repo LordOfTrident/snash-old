@@ -1,14 +1,13 @@
 #include "snash.h"
 
-int main(const int argc, const char *argv[]) {
-	if (Snash_ReadParams(argc, argv) == true)
-		return SNASH_NO_ERROR;
+int main(int argc, const char *argv[]) {
+	if (!snash_read_params(argc, argv))
+		return SNASH_EC_OK;
 
-	Snash_path = (char*)argv[0];
+	g_snash_path = str_copy(str((char*)argv[0]));
+	snash_init();
+	snash_main_loop();
+	snash_finish();
 
-	Snash_Init();
-	Snash_MainLoop();
-	Snash_Finish();
-
-	return Snash_exitcode;
+	return g_snash_exitcode;
 };
