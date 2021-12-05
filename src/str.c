@@ -114,7 +114,23 @@ void str_resize(t_str *p_mstr, usize p_new_len) {
 };
 
 bool str_comp(t_str p_stra, t_str p_strb) {
+	if (p_stra.buf == NULL && p_strb.buf == NULL)
+		return true;
+	else if (p_stra.buf == NULL || p_strb.buf == NULL)
+		return false;
+
 	return strcmp(p_stra.buf, p_strb.buf) == 0;
+};
+
+bool str_comp_entire(t_str p_stra, t_str p_strb) {
+	if (p_stra.buf == NULL && p_strb.buf == NULL)
+		return true;
+	else if (p_stra.buf == NULL || p_strb.buf == NULL)
+		return false;
+
+	return
+		strcmp(p_stra.buf, p_strb.buf) == 0 &&
+		p_stra.len == p_strb.len;
 };
 
 t_str str_concat(t_str p_stra, t_str p_strb) {
@@ -170,11 +186,18 @@ t_str str_substr(t_str p_str, usize p_start, usize p_len) {
 	if (p_str.buf == NULL) {
 		ERR_SET_G_ERROR("p_str.buf is NULL");
 		return STR_NULL;
-	} else if (p_start > p_str.len || p_str.len < p_start + p_len) {
+	} else if (
+		p_start > p_str.len ||
+		(p_str.len < p_start + p_len) &&
+		(p_len != STR_SUBSTR_LEN_REST)
+	) {
 		ERR_SET_G_ERROR("invalid p_len/p_start");
 		return STR_NULL;
 	} else if (p_len == 0)
 		return str_copy(str(""));
+
+	if (p_len == STR_SUBSTR_LEN_REST)
+		p_len = p_str.len - p_start;
 
 	char *buf = (char*)malloc(p_len + 1); ERR_WATCH;
 	if (buf == NULL) {
@@ -192,10 +215,17 @@ void str_substr_into(t_str *p_mstr, usize p_start, usize p_len) {
 	if (p_mstr->buf == NULL) {
 		ERR_SET_G_ERROR("p_mstr->buf is NULL");
 		return;
-	} else if (p_start > p_mstr->len || p_mstr->len < p_start + p_len) {
+	} else if (
+		p_start > p_mstr->len ||
+		(p_mstr->len < p_start + p_len) &&
+		(p_len != STR_SUBSTR_LEN_REST)
+	) {
 		ERR_SET_G_ERROR("invalid p_len/p_start");
 		return;
 	};
+
+	if (p_len == STR_SUBSTR_LEN_REST)
+		p_len = p_mstr->len - p_start;
 
 	// Copy the substring to the start of the string
 	if (p_start != 0)
@@ -214,7 +244,7 @@ void str_substr_into(t_str *p_mstr, usize p_start, usize p_len) {
 	p_mstr->len = p_len;
 };
 
-t_str str_replace(t_str p_str, t_str p_torep, t_str p_rep) {
+t_str str_replace(t_str p_str, t_str p_torep, t_str p_rep, usize p_cnt) {
 	ERR_WATCH_INIT; ERR_WATCH;
 	if (p_str.buf == NULL) {
 		ERR_SET_G_ERROR("p_str.buf is NULL");
@@ -225,15 +255,16 @@ t_str str_replace(t_str p_str, t_str p_torep, t_str p_rep) {
 	};
 
 	if (p_rep.buf == NULL)
-		str_clear(&p_rep);
+		p_rep = str("");
 
 	// Count how many times the substring occurs in
 	// the string
 	usize cnt; // Count, not cunt
 	char *ins = p_str.buf;
-	for (cnt = 0; ins < p_str.buf + p_str.len; ++ cnt, ins += p_rep.len) {
+	for (cnt = 0; cnt < p_cnt && ins < p_str.buf + p_str.len; ++ cnt) {
 		if ((ins = strstr(ins, p_torep.buf)) == NULL)
 			break;
+		ins += p_rep.len;
 	};
 
 	// It is so we can just allocate the needed memory all at once
@@ -265,7 +296,7 @@ t_str str_replace(t_str p_str, t_str p_torep, t_str p_rep) {
 	return (t_str){buf, len};
 };
 
-void str_replace_into(t_str *p_mstr, t_str p_torep, t_str p_rep) {
+void str_replace_into(t_str *p_mstr, t_str p_torep, t_str p_rep, usize p_cnt) {
 	ERR_WATCH_INIT; ERR_WATCH;
 	if (p_mstr->buf == NULL) {
 		ERR_SET_G_ERROR("p_mstr->buf is NULL");
@@ -280,9 +311,10 @@ void str_replace_into(t_str *p_mstr, t_str p_torep, t_str p_rep) {
 
 	usize cnt;
 	char *ins = p_mstr->buf;
-	for (cnt = 0; ins < p_mstr->buf + p_mstr->len; ++ cnt, ins += p_rep.len) {
+	for (cnt = 0; cnt < p_cnt && ins < p_mstr->buf + p_mstr->len; ++ cnt) {
 		if ((ins = strstr(ins, p_torep.buf)) == NULL)
 			break;
+		ins += p_rep.len;
 	};
 
 	// reallocing is not really ideal here so we just

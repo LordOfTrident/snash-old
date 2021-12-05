@@ -22,10 +22,12 @@ implemented. Snash stands for Snail Shell.
 ## Features
 - [X] Input
 - [X] Variables list
-- [ ] Lexer
-- [ ] Changing working directory (cd)
+- [X] Lexer
+- [ ] Parser
+- [ ] Executor
 - [ ] Starting programs + passing parameters
-- [ ] Setting Snash/Environment variables
+- [ ] Changing working directory (cd)
+- [ ] Setting Snash/environment variables
 - [ ] If statements
 - [ ] Loops
 

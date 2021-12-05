@@ -24,7 +24,7 @@
 	g_error.file = ERR_FILE; \
 	g_error.func = ERR_FUNC; \
 	g_error.line = ERR_WATCH_LINE; \
-	g_error.hpnd = true;
+	g_error.hpnd = true
 
 typedef struct {
 	char *why;

@@ -7,6 +7,8 @@ F_SRC = \
 	src/str.c\
 	src/error.c\
 	src/var.c\
+	src/lexer.c\
+	src/token.c\
 	src/utils.c\
 	src/snash.c
 
@@ -17,6 +19,8 @@ F_HEADER = \
 	src/error.h\
 	src/colors.h\
 	src/var.h\
+	src/lexer.h\
+	src/token.h\
 	src/utils.h\
 	src/version.h
 
