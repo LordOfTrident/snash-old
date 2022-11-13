@@ -6,11 +6,11 @@
 	<a href="./LICENSE">
 		<img alt="License" src="https://img.shields.io/badge/license-GPL-blue?color=7aca00"/>
 	</a>
-	<a href="https://github.com/LordOfTrident/snash/issues">
-		<img alt="Issues" src="https://img.shields.io/github/issues/LordOfTrident/snash?color=0088ff"/>
+	<a href="https://github.com/LordOfTrident/snash-old/issues">
+		<img alt="Issues" src="https://img.shields.io/github/issues/LordOfTrident/snash-old?color=0088ff"/>
 	</a>
-	<a href="https://github.com/LordOfTrident/snash/pulls">
-		<img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/LordOfTrident/snash?color=0088ff"/>
+	<a href="https://github.com/LordOfTrident/snash-old/pulls">
+		<img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/LordOfTrident/snash-old?color=0088ff"/>
 	</a>
 	<br><br><br>
 </p>
